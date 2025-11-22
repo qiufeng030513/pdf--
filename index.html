@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pro Data Extractor V12</title>
+    <!-- 核心库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* 保持按钮原有配色逻辑 */
+            --grad-primary: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            --grad-copy:    linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+            --grad-mobile:  linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+
+        body { 
+            font-family: 'PingFang SC', sans-serif; 
+            margin: 0; 
+            min-height: 100vh; 
+            color: #333;
+            /* === 视觉升级：深海极光背景 === */
+            background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364);
+            background-attachment: fixed;
+            overflow-x: hidden;
+        }
+
+        /* === 粒子特效样式 (圆形) === */
+        .particle {
+            position: fixed;
+            top: -10px;
+            background: white;
+            border-radius: 50%; /* 圆形 */
+            pointer-events: none; /* 不遮挡点击 */
+            z-index: 0; 
+            animation-name: fall;
+            animation-timing-function: linear;
+            animation-iteration-count: infinite;
+            box-shadow: 0 0 5px rgba(255,255,255,0.3); /* 微光效果 */
+        }
+
+        @keyframes fall {
+            0% { transform: translateY(-10px); }
+            100% { transform: translateY(110vh); }
+        }
+
+        /* === PC 布局 (高透磨砂玻璃) === */
+        .pc-view { 
+            display: flex; flex-direction: column; align-items: center; padding: 40px; 
+            position: relative; z-index: 1; 
+        }
+        .app-card {
+            width: 100%; max-width: 1000px; 
+            /* 玻璃拟态升级 */
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: 24px;
+            /* 更柔和的阴影 */
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.4);
+        }
+        .header { padding: 40px; text-align: center; border-bottom: 1px solid rgba(0,0,0,0.05); }
+        .header h1 { margin: 0; font-size: 2rem; color: #1a202c; letter-spacing: 1px; }
+        .header .sub { color: #718096; margin-top: 10px; font-size: 0.9rem; }
+
+        /* 拖拽区 */
+        .drop-box {
+            margin: 30px 40px; border: 2px dashed #cbd5e0; border-radius: 16px; padding: 40px;
+            text-align: center; cursor: pointer; transition: 0.3s; 
+            background: rgba(247, 250, 252, 0.6);
+        }
+        .drop-box:hover { border-color: #4facfe; background: rgba(235, 248, 255, 0.7); transform: scale(1.01); }
+
+        /* 按钮组 (保持原UI) */
+        .action-bar { padding: 0 40px 30px; display: flex; gap: 15px; justify-content: center; }
+        .btn {
+            border: none; padding: 12px 28px; border-radius: 8px; color: #fff; font-weight: 600; cursor: pointer;
+            display: flex; align-items: center; gap: 8px; font-size: 0.95rem; transition: 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .btn:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.1); }
+        .btn:disabled { background: #cbd5e0; cursor: not-allowed; box-shadow: none; }
+        
+        .btn-main { background: var(--grad-primary); }
+        .btn-copy { background: #667eea; }
+        .btn-qr   { background: #2d3748; } 
+
+        /* 表格 */
+        .table-box { border-top: 1px solid #edf2f7; max-height: 500px; overflow-y: auto; display: none; background: rgba(255,255,255,0.8); }
+        table { width: 100%; border-collapse: collapse; }
+        th { position: sticky; top: 0; background: rgba(247, 250, 252, 0.98); padding: 15px 30px; text-align: left; color: #4a5568; font-size: 0.85rem; z-index: 10; }
+        td { padding: 12px 30px; border-bottom: 1px solid #edf2f7; font-size: 0.95rem; }
+        
+        .idx-badge { 
+            display: inline-block; width: 24px; height: 24px; line-height: 24px; 
+            background: #edf2f7; color: #4a5568; text-align: center; border-radius: 50%; font-size: 0.75rem; 
+        }
+
+        /* === 手机布局 === */
+        .mobile-view { 
+            display: none; padding: 20px; max-width: 600px; margin: 0 auto; 
+            position: relative; z-index: 1;
+        }
+        .m-header { text-align: center; margin-bottom: 25px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .m-header h2 { color: #fff; font-size: 1.5rem; }
+        .m-header p { color: rgba(255,255,255,0.8); font-size: 0.9rem; }
+
+        .m-card {
+            background: rgba(255, 255, 255, 0.96); 
+            border-radius: 16px; padding: 18px 22px; margin-bottom: 14px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: flex; justify-content: space-between; align-items: center;
+            border-left: 5px solid #4facfe; 
+        }
+        .m-left { display: flex; align-items: center; gap: 16px; }
+        .m-idx { font-size: 1.3rem; font-weight: 800; color: #cbd5e0; min-width: 35px; text-align: center; font-style: italic; }
+        
+        .m-details { display: flex; flex-direction: column; gap: 5px; }
+        .m-order { font-weight: 700; color: #2d3748; font-size: 1.1rem; }
+        .m-phone { font-size: 0.95rem; color: #718096; }
+        
+        .m-btn-call {
+            width: 48px; height: 48px; border-radius: 50%; background: var(--grad-mobile);
+            display: flex; align-items: center; justify-content: center; color: white; font-size: 1.2rem;
+            text-decoration: none; box-shadow: 0 6px 15px rgba(67, 233, 123, 0.4);
+        }
+
+        /* 弹窗 */
+        .modal-mask {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75);
+            display: none; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(8px);
+        }
+        .modal { background: #fff; padding: 35px; border-radius: 20px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+        
+        /* 进度条 */
+        .progress-line { height: 3px; background: #4facfe; width: 0%; transition: width 0.2s; }
+    </style>
+</head>
+<body>
+
+<!-- 粒子容器 -->
+<div id="particle-container"></div>
+
+<!-- PC 视图 -->
+<div class="pc-view" id="pcView">
+    <div class="app-card">
+        <div class="header">
+            <h1>外呼系统</h1>
+            <div class="sub">（24小时后失效）</div>
+        </div>
+
+        <div class="drop-box" id="dropBox">
+            <div id="defaultMsg">
+                <i class="fas fa-file-import" style="font-size:48px; color:#cbd5e0; margin-bottom:15px;"></i>
+                <div>点击或拖拽 PDF 文件至此</div>
+            </div>
+            <div id="fileMsg" style="display:none; font-weight:bold; color:#4facfe;">
+                <i class="fas fa-check-circle"></i> <span id="fileName"></span>
+            </div>
+            <input type="file" id="fileInput" accept="application/pdf" style="display:none;">
+        </div>
+
+        <div class="progress-line" id="progressBar"></div>
+
+        <div class="action-bar">
+            <button id="btnStart" class="btn btn-main" disabled onclick="startProcess()">
+                <i class="fas fa-play"></i> 开始解析
+            </button>
+            <button id="btnCopy" class="btn btn-copy" style="display:none" onclick="doCopy()">
+                <i class="fas fa-copy"></i> 一键复制
+            </button>
+            <button id="btnQr" class="btn btn-qr" style="display:none" onclick="genQR()">
+                <i class="fas fa-qrcode"></i> 手机扫码
+            </button>
+            <button id="btnReset" class="btn" onclick="location.reload()" style="background:#edf2f7; color:#4a5568;">
+                清除
+            </button>
+        </div>
+
+        <div class="table-box" id="tableBox">
+            <table id="dataTable">
+                <thead><tr><th width="10%">序号</th><th width="45%">订单编号</th><th width="45%">虚拟号</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 手机 视图 -->
+<div class="mobile-view" id="mobileView">
+    <div class="m-header">
+        <h2 style="margin:0;">📲 待拨列表</h2>
+        <p style="margin:8px 0 0;">序号与电脑端文件页码严格一致</p>
+    </div>
+    <div id="mobileList"></div>
+    
+    <!-- 过期提示 -->
+    <div id="expiredMsg" style="display:none; text-align:center; margin-top:50px;">
+        <div style="background: white; padding: 30px; border-radius: 16px; color:#e53e3e; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+            <i class="fas fa-ban" style="font-size:48px; margin-bottom:20px;"></i><br>
+            <strong>链接已超过24小时失效</strong>
+        </div>
+    </div>
+</div>
+
+<!-- 二维码弹窗 -->
+<div class="modal-mask" id="qrModal" onclick="this.style.display='none'">
+    <div class="modal" onclick="event.stopPropagation()">
+        <h3 style="color:#2d3748">手机扫码拨号</h3>
+        <div id="qrcodearea" style="margin:25px auto; width:200px; height:200px;"></div>
+        <p style="font-size:0.85rem; color:#718096;">有效期24小时 • 顺序已严格锁定</p>
+    </div>
+</div>
+
+<script>
+    // === 新增：圆形粒子生成逻辑 ===
+    function initParticles() {
+        const container = document.getElementById('particle-container');
+        const particleCount = 50; // 粒子数量
+
+        for (let i = 0; i < particleCount; i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            
+            // 随机属性设置
+            const size = Math.random() * 4 + 2; // 2px 到 6px 大小
+            const startX = Math.random() * 100; // 0 ~ 100vw
+            const duration = Math.random() * 15 + 10; // 10s ~ 25s 下落时长
+            const delay = Math.random() * 10; // 随机延迟
+            const opacity = Math.random() * 0.5 + 0.1; // 透明度
+
+            p.style.width = size + 'px';
+            p.style.height = size + 'px';
+            p.style.left = startX + 'vw';
+            p.style.opacity = opacity;
+            p.style.animationDuration = duration + 's';
+            p.style.animationDelay = '-' + delay + 's'; // 负数Delay让动画立即显示分布
+            
+            container.appendChild(p);
+        }
+    }
+    initParticles(); // 启动特效
+
+    // =========================================
+    // 核心逻辑 (完美保留 V10 功能)
+    // =========================================
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    
+    let GLOBAL_DATA = []; 
+    let currentPdf = null;
+    const EXPIRE_HOURS = 24;
+
+    window.onload = function() {
+        initParticles();
+        const params = new URLSearchParams(window.location.search);
+        if(params.has('d') && params.has('t')) {
+            showMobileMode(params.get('d'), params.get('t'));
+        }
+    };
+
+    const dropBox = document.getElementById('dropBox');
+    const fileInput = document.getElementById('fileInput');
+    
+    dropBox.onclick = () => fileInput.click();
+    fileInput.onchange = (e) => setFile(e.target.files[0]);
+    dropBox.ondragover = (e) => { e.preventDefault(); dropBox.style.backgroundColor = 'rgba(79, 172, 254, 0.1)'; };
+    dropBox.ondragleave = () => { dropBox.style.backgroundColor = 'rgba(247, 250, 252, 0.6)'; };
+    dropBox.ondrop = (e) => { e.preventDefault(); if(e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); };
+
+    function setFile(file) {
+        if(file.type !== 'application/pdf') return alert('请上传PDF文件');
+        currentPdf = file;
+        document.getElementById('defaultMsg').style.display = 'none';
+        document.getElementById('fileMsg').style.display = 'block';
+        document.getElementById('fileName').innerText = file.name;
+        document.getElementById('btnStart').disabled = false;
+    }
+
+    async function startProcess() {
+        if(!currentPdf) return;
+        
+        const btn = document.getElementById('btnStart');
+        btn.disabled = true; btn.innerHTML = '<i class="fas fa-sync fa-spin"></i> 解析中...';
+        document.getElementById('tableBox').style.display = 'block';
+        const tbody = document.querySelector('#dataTable tbody'); 
+        tbody.innerHTML = '';
+        GLOBAL_DATA = []; 
+
+        try {
+            const buf = await currentPdf.arrayBuffer();
+            const doc = await pdfjsLib.getDocument(buf).promise;
+            
+            for(let i=1; i<=doc.numPages; i++) {
+                const page = await doc.getPage(i);
+                const content = await page.getTextContent();
+                const text = content.items.map(it => it.str).join('\n');
+                
+                const orderMatch = text.match(/69\d{17}/); 
+                const phoneMatch = /(\d{11})\s*转\s*(\d{4})/.exec(text);
+
+                const item = {
+                    idx: i, 
+                    o: orderMatch ? orderMatch[0] : null,
+                    p: phoneMatch ? `${phoneMatch[1]}转${phoneMatch[2]}` : null,
+                    rawPhone: phoneMatch ? `${phoneMatch[1]},${phoneMatch[2]}` : null
+                };
+
+                GLOBAL_DATA.push(item);
+
+                const tr = `
+                <tr>
+                    <td><span class="idx-badge">${item.idx}</span></td>
+                    <td style="color:${item.o ? '#2d3748':'#cbd5e0'}">${item.o || '未识别'}</td>
+                    <td style="font-family:monospace; color:${item.p ? '#48bb78':'#cbd5e0'}">
+                        ${item.p || (item.o ? '<span style="color:#e53e3e">无号码</span>' : '-')}
+                    </td>
+                </tr>`;
+                tbody.insertAdjacentHTML('beforeend', tr);
+
+                document.getElementById('progressBar').style.width = (i/doc.numPages*100) + '%';
+                
+                if(i % 10 === 0) await new Promise(r => setTimeout(r, 0));
+            }
+
+            btn.innerHTML = '解析完成';
+            document.getElementById('btnCopy').style.display = 'flex';
+            document.getElementById('btnQr').style.display = 'flex';
+
+        } catch(err) {
+            alert('解析中断: ' + err.message);
+            btn.disabled = false;
+        }
+    }
+
+    function doCopy() {
+        if(!GLOBAL_DATA.length) return;
+        const str = GLOBAL_DATA
+            .map(d => `${d.o || '缺失'}\t${d.p || '缺失'}`)
+            .join('\n');
+        
+        navigator.clipboard.writeText(str).then(() => {
+            const btn = document.getElementById('btnCopy');
+            const org = btn.innerHTML;
+            btn.innerHTML = '已复制!';
+            setTimeout(() => btn.innerHTML = org, 2000);
+        });
+    }
+
+    function genQR() {
+        if(location.protocol === 'file:') alert('请部署至服务器使用扫码功能');
+
+        const packedData = GLOBAL_DATA
+            .filter(d => d.p && d.rawPhone)
+            .map(d => [
+                d.idx,               
+                d.o ? d.o.slice(-6) : '未知', 
+                d.rawPhone             
+            ]);
+
+        if(packedData.length === 0) return alert('未找到有效的号码数据');
+
+        const jsonStr = JSON.stringify(packedData);
+        if(jsonStr.length > 2500) return alert('数据量过大(超过100条)，建议拆分PDF。');
+
+        const ts = Date.now();
+        const url = `${location.origin}${location.pathname}?t=${ts}&d=${encodeURIComponent(jsonStr)}`;
+
+        const box = document.getElementById('qrcodearea');
+        box.innerHTML = '';
+        new QRCode(box, {
+            text: url, width: 200, height: 200,
+            colorDark : "#1a202c", colorLight : "#ffffff",
+            correctLevel : QRCode.CorrectLevel.L
+        }); 
+        
+        document.getElementById('qrModal').style.display = 'flex';
+    }
+
+    function showMobileMode(dataStr, timeStr) {
+        document.getElementById('pcView').style.display = 'none';
+        document.getElementById('mobileView').style.display = 'block';
+
+        const now = Date.now();
+        const genTime = parseInt(timeStr);
+        if(now - genTime > EXPIRE_HOURS * 3600 * 1000) {
+            document.getElementById('mobileList').style.display = 'none';
+            document.getElementById('expiredMsg').style.display = 'block';
+            return;
+        }
+
+        try {
+            const list = JSON.parse(decodeURIComponent(dataStr));
+            const container = document.getElementById('mobileList');
+            
+            let html = '';
+            list.forEach(item => {
+                const idx = item[0];
+                const order = item[1];
+                const phone = item[2];
+                const displayPhone = phone.replace(',', ' 转 ');
+
+                html += `
+                <div class="m-card">
+                    <div class="m-left">
+                        <div class="m-idx">#${idx}</div>
+                        <div class="m-details">
+                            <div class="m-order">尾号 ${order}</div>
+                            <div class="m-phone">${displayPhone}</div>
+                        </div>
+                    </div>
+                    <a href="tel:${phone}" class="m-btn-call">
+                        <i class="fas fa-phone"></i>
+                    </a>
+                </div>`;
+            });
+            container.innerHTML = html;
+
+        } catch(e) {
+            alert('数据损坏');
+            location.href = location.pathname.split('?')[0];
+        }
+    }
+</script>
+</body>
+</html>
